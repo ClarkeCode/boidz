@@ -1,8 +1,7 @@
 #include "raylib.h"
 #include "lib/raylib_extensions.hpp"
 #include "lib/game_concepts.hpp"
-//#include "pong_model.hpp"
-#include <iostream>
+#include "src/boid_model.hpp"
 
 Camera2D setupCamera(concept::GameWorld& gw) {
     Camera2D camera {0};
@@ -13,7 +12,7 @@ Camera2D setupCamera(concept::GameWorld& gw) {
     return camera;
 }
 
-void updateGameState(){//pong::PongModel& model) {
+void updateGameState(boid::BoidModel& model) {
     // float frameTime = GetFrameTime();
     
     // //P1 controls
@@ -40,21 +39,15 @@ void updateGameState(){//pong::PongModel& model) {
     // model.PongBall.updateBall(frameTime, model);
 }
 
-void drawGameState(Camera2D& camera){//, pong::PongModel& model) {
+void drawGameState(Camera2D& camera, boid::BoidModel& model) {
         // Draw
         //----------------------------------------------------------------------------------
         BeginDrawing();
             ClearBackground(RAYWHITE);
-
-            // if (!model.canBallMove) {
-            //     DrawTextRec(GetFontDefault(), "P1: 'W', 'S' to move\nP2 Up, Down to move\n'R' to serve the ball", 
-            //         extensions::RectangleCentreOnCoord(Vector2{model.worldInfo->width / 2.0f, model.worldInfo->height * 8.0f / 10.0f},
-            //         Rectangle{0,0, 260, 200}), 20, 4, 1, BLACK);
-            // }
             
             BeginMode2D(camera);
 
-                //model.drawObject();
+                model.renderModel();
 
             EndMode2D();
 
@@ -70,7 +63,8 @@ int main(int argc, char* argv[]) {
     InitWindow(gameWorld.width, gameWorld.height, "Boidz");
 
     Camera2D camera = setupCamera(gameWorld);
-    //pong::PongModel gameModel(&gameWorld);
+    
+    boid::BoidModel gameModel(&gameWorld);
     
     SetTargetFPS(60); // Set game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
@@ -79,9 +73,9 @@ int main(int argc, char* argv[]) {
     }
     // Main game loop
     while (!WindowShouldClose()) { // Detect window close button or ESC key
-        // updateGameState(gameModel);
+        updateGameState(gameModel);
 
-        // drawGameState(camera, gameModel);
+        drawGameState(camera, gameModel);
     }
 
     // De-Initialization
