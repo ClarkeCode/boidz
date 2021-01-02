@@ -9,17 +9,41 @@
 #include "raylib_extensions.hpp"
 
 namespace concept {
+
+
+    //=================================================================================================================
     class GameWorld {
         public:
         float width, height;
         GameWorld(float horizontalWidth, float verticalHeight) : width(horizontalWidth), height(verticalHeight) {}
     };
 
-    class DrawableObject {
+    class Model {};
+    //=================================================================================================================
+
+
+
+
+
+    //Game Objects
+    //=================================================================================================================
+    class GameObject {
+        public:
+        virtual ~GameObject() = default;
+    };
+
+    class PhysicsObject : public virtual GameObject {
+        public:
+        Vector2 pos, vel, acc;
+        virtual ~PhysicsObject() = default;
+    };
+
+    class DrawableObject : public virtual GameObject {
         public:
         virtual void drawObject() = 0;
-        virtual ~DrawableObject() {}
+        virtual ~DrawableObject() = default;
     };
+    //=================================================================================================================
 
     class CollidableRectangle {
         protected:

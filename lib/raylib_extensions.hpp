@@ -5,6 +5,7 @@
 #ifndef RAYLIB_EXTENSIONS
 #define RAYLIB_EXTENSIONS
 #include "raylib.h"
+#include "raymath.h"
 
 namespace extensions {
     //Rectangle related extensions
@@ -36,6 +37,19 @@ namespace extensions {
         else
             return Vector2{rect.x+rect.width, rect.y+rect.height};
     }
+
+    //Add the scalar value to both the vector's x and y component
+    inline Vector2 Vector2AddScalar(Vector2 v, float scalar) { return Vector2{v.x + scalar, v.y + scalar}; }
+    //Returns a perpendicular vector that is rotated clockwise from the argument vector
+    inline Vector2 Vector2PerpendicularCW(Vector2 v) { return Vector2{v.y, -v.x}; }
+    //Returns a perpendicular vector that is rotated counter-clockwise from the argument vector
+    inline Vector2 Vector2PerpendicularCCW(Vector2 v) { return Vector2{-v.y, v.x}; }
+    //Guarantees that the resulting vector does not have a length longer than the specified length
+    inline Vector2 Vector2Clamp(Vector2 v, float maxLength) {
+        if (Vector2Length(v) > maxLength) return Vector2Scale(Vector2Normalize(v), maxLength);
+        return v;
+    }
+
 
     inline bool isValueWithinRange(float value, float min, float max) { return value >= min && value <= max; }
     inline bool isPointWithinYValues(Vector2 const& xyCoord, Rectangle const& rect) {
