@@ -56,6 +56,7 @@ namespace extensions {
     inline Vector2 Vector2UnitVectorFromRadian(float radianAngle) { return Vector2{cosf(radianAngle), -sinf(radianAngle)}; }
     //Returns the radian angle as a float of the provided vector
     inline float RadianFromVector2(Vector2 v) { return acosf(Vector2Normalize(v).x); }
+    inline Vector2 Vector2ScaleToLength(Vector2 v, float length) { return Vector2Scale(Vector2Normalize(v), length); }
 
 
     inline bool isValueWithinRange(float value, float min, float max) { return value >= min && value <= max; }
