@@ -40,6 +40,8 @@ namespace extensions {
 
     //Add the scalar value to both the vector's x and y component
     inline Vector2 Vector2AddScalar(Vector2 v, float scalar) { return Vector2{v.x + scalar, v.y + scalar}; }
+    //Multiply both the vector's x and y component by scalar value
+    inline Vector2 Vector2MultiplyScalar(Vector2 v, float scalar) { return Vector2{v.x*scalar, v.y*scalar}; }
     //Returns a perpendicular vector that is rotated clockwise from the argument vector
     inline Vector2 Vector2PerpendicularCW(Vector2 v) { return Vector2{v.y, -v.x}; }
     //Returns a perpendicular vector that is rotated counter-clockwise from the argument vector
@@ -49,6 +51,11 @@ namespace extensions {
         if (Vector2Length(v) > maxLength) return Vector2Scale(Vector2Normalize(v), maxLength);
         return v;
     }
+
+    //Produces a unit vector pointing at the given radian angle
+    inline Vector2 Vector2UnitVectorFromRadian(float radianAngle) { return Vector2{cosf(radianAngle), -sinf(radianAngle)}; }
+    //Returns the radian angle as a float of the provided vector
+    inline float RadianFromVector2(Vector2 v) { return acosf(Vector2Normalize(v).x); }
 
 
     inline bool isValueWithinRange(float value, float min, float max) { return value >= min && value <= max; }
