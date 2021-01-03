@@ -5,7 +5,7 @@ using namespace extensions;
 
 boid::Boid::Boid() {
     float radAngle = DEG2RAD * GetRandomValue(0, 360);
-    vel = Vector2Scale(Vector2{cosf(radAngle), -sinf(radAngle)}, 100);
+    vel = Vector2Scale(Vector2UnitVectorFromRadian(radAngle), 100);
 }
 
 void boid::Boid::drawObject() {
@@ -36,7 +36,8 @@ boid::BoidModel::BoidModel(concept::GameWorld* gw) {
     worldInfo = gw;
     boids = std::vector<Boid>();
 
-    boids.push_back(Boid());
+    for (int x = 0; x < 10; x++)
+        boids.push_back(Boid());
     boids[0].pos = Vector2 {gw->width/2, gw->height/2};
 }
 
