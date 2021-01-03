@@ -10,6 +10,7 @@ namespace boid {
         Boid();
 
         virtual void drawObject() override;
+        void updatePosition(float fraction);
     };
 
     class BoidModel : public concept::Model {
@@ -20,6 +21,7 @@ namespace boid {
         BoidModel(concept::GameWorld* gw);
 
         void renderModel();
+        void updateModel(float fraction);
     };
 }
 

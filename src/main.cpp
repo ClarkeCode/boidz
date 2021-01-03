@@ -13,7 +13,8 @@ Camera2D setupCamera(concept::GameWorld& gw) {
 }
 
 void updateGameState(boid::BoidModel& model) {
-    // float frameTime = GetFrameTime();
+    float frameTime = GetFrameTime();
+    model.updateModel(frameTime);
     
     // //P1 controls
     // if (IsKeyDown(KEY_W))

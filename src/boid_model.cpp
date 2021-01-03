@@ -5,7 +5,7 @@ using namespace extensions;
 
 boid::Boid::Boid() {
     float radAngle = DEG2RAD * GetRandomValue(0, 360);
-    vel = Vector2Scale(Vector2{sinf(radAngle), cosf(radAngle)}, 40);
+    vel = Vector2Scale(Vector2{cosf(radAngle), -sinf(radAngle)}, 100);
 }
 
 void boid::Boid::drawObject() {
@@ -26,6 +26,11 @@ void boid::Boid::drawObject() {
     DrawCircle(pos.x, pos.y, 2.5, BLUE);
 }
 
+void boid::Boid::updatePosition(float fraction) {
+    vel = Vector2Add(vel, Vector2MultiplyScalar(acc, fraction));
+    pos = Vector2Add(pos, Vector2MultiplyScalar(vel, fraction));
+}
+
 
 boid::BoidModel::BoidModel(concept::GameWorld* gw) {
     worldInfo = gw;
@@ -38,5 +43,15 @@ boid::BoidModel::BoidModel(concept::GameWorld* gw) {
 void boid::BoidModel::renderModel() {
     for (Boid& b : boids) {
         b.drawObject();
+    }
+}
+
+void boid::BoidModel::updateModel(float fraction) {
+    for (Boid& b : boids) {
+        b.updatePosition(fraction);
+        if (b.pos.y < 0) { b.pos.y = worldInfo->height; }
+        if (b.pos.y > worldInfo->height) { b.pos.y = 0; }
+        if (b.pos.x < 0) { b.pos.x = worldInfo->width; }
+        if (b.pos.x > worldInfo->width) { b.pos.x = 0; }
     }
 }
