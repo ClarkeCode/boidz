@@ -1,5 +1,4 @@
 #include "raylib.h"
-#include "lib/raylib_extensions.hpp"
 #include "lib/game_concepts.hpp"
 #include "src/boid_model.hpp"
 
@@ -12,35 +11,11 @@ Camera2D setupCamera(concept::GameWorld& gw) {
     return camera;
 }
 
-void updateGameState(boid::BoidModel& model) {
+void updateGameState(){
     float frameTime = GetFrameTime();
-    model.updateModel(frameTime);
-    
-    // //P1 controls
-    // if (IsKeyDown(KEY_W))
-    //     model.P1Paddle.updatePaddle(frameTime * model.P1Paddle.speed * -1, model.BottomWall.getCollisionBox().y, model.TopWall.getCollisionBox().height);
-    // if (IsKeyDown(KEY_S))
-    //     model.P1Paddle.updatePaddle(frameTime * model.P1Paddle.speed, model.BottomWall.getCollisionBox().y, model.TopWall.getCollisionBox().height);
-
-    // //P2 controls
-    // if (IsKeyDown(KEY_UP))
-    //     model.P2Paddle.updatePaddle(frameTime * model.P2Paddle.speed * -1, model.BottomWall.getCollisionBox().y, model.TopWall.getCollisionBox().height);
-    // if (IsKeyDown(KEY_DOWN))
-    //     model.P2Paddle.updatePaddle(frameTime * model.P2Paddle.speed, model.BottomWall.getCollisionBox().y, model.TopWall.getCollisionBox().height);
-    
-    // //Start ball movement
-    // if (IsKeyPressed(KEY_R)) {
-    //     if (model.canBallMove) {
-    //         model.PongBall.xyPosition = Vector2{model.worldInfo->width/2.0f, model.worldInfo->height/2.0f};
-    //         model.PongBall.setDirection();
-    //     }
-    //     model.canBallMove = true;
-    // }
-
-    // model.PongBall.updateBall(frameTime, model);
 }
 
-void drawGameState(Camera2D& camera, boid::BoidModel& model) {
+void drawGameState(Camera2D& camera){//, boid::BoidModel& model) {
         // Draw
         //----------------------------------------------------------------------------------
         BeginDrawing();
@@ -48,7 +23,7 @@ void drawGameState(Camera2D& camera, boid::BoidModel& model) {
             
             BeginMode2D(camera);
 
-                model.renderModel();
+                //model.renderModel();
 
             EndMode2D();
 
@@ -65,7 +40,7 @@ int main(int argc, char* argv[]) {
 
     Camera2D camera = setupCamera(gameWorld);
     
-    boid::BoidModel gameModel(&gameWorld);
+    //boid::BoidModel gameModel(&gameWorld);
     
     SetTargetFPS(60); // Set game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
@@ -74,9 +49,9 @@ int main(int argc, char* argv[]) {
     }
     // Main game loop
     while (!WindowShouldClose()) { // Detect window close button or ESC key
-        updateGameState(gameModel);
+        //updateGameState(gameModel);
 
-        drawGameState(camera, gameModel);
+        //drawGameState(camera, gameModel);
     }
 
     // De-Initialization
