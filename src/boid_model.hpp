@@ -3,6 +3,8 @@
 #include <vector>
 #include "lib/ecs.hpp"
 #include "lib/linalg.h"
+#include <random> //randomization
+#include <utility> //move
 
 namespace boid {
     using namespace linalg::aliases;
@@ -10,9 +12,11 @@ namespace boid {
     class SpacialComponent : public ecs::Component {
         public:
         float2 pos, vel, acc;
+        float mass, maxSpeed, maxForce;
         
-        SpacialComponent() : pos(0.0f), vel(0.0f), acc(0.0f) {}
-        SpacialComponent(float2 position, float2 velocity, float2 acceleration) : pos(position), vel(velocity), acc(acceleration) {}
+        SpacialComponent(float2 position, float2 velocity, float2 acceleration, float componentMass, float max_speed, float max_force) : 
+            pos(position), vel(velocity), acc(acceleration), mass(componentMass), maxSpeed(max_speed), maxForce(max_force) {}
+        SpacialComponent() : SpacialComponent(float2(0,0), float2(0,0), float2(0,0), 1.0f, 100.0f, 10.0f) {}
     };
 
     class VisualComponent : public ecs::Component {
@@ -23,13 +27,55 @@ namespace boid {
         VisualComponent() : isDisplayable(true), showDebugInfo(false), debugLevel(0) {}
     };
 
-    class Boid : public ecs::Entity {
+    class Boid { // : public ecs::Entity {
         public:
-        Boid() : ecs::Entity(2) {
-            components.push_back((ecs::Component::ptr_t)new SpacialComponent);
-            components.push_back((ecs::Component::ptr_t)new VisualComponent);
+        using ptr_t = std::shared_ptr<Boid>;
+        using BoidFlock = std::vector<Boid::ptr_t>;
+
+        SpacialComponent spacialInfo;
+        VisualComponent visualInfo;
+
+        Boid() = default;
+
+        inline void setPosition(float2 xy) { spacialInfo.pos = xy; }
+        inline void setRandomPosition(float2 width_height_limits) {
+            std::default_random_engine generator;
+            std::uniform_real_distribution<float> distribution(width_height_limits.x, width_height_limits.y);
+            float genX = distribution(generator);
+            float genY = distribution(generator);
+            spacialInfo.pos = float2(genX, genY);
         }
     };
+
+    namespace forces {
+        class Force {
+            public:
+            using ptr_t = std::unique_ptr<Force>;
+            virtual float2 produceSteeringVector(Boid::BoidFlock const& flock, Boid::ptr_t const& actor) const = 0;
+            virtual ~Force() = default;
+        };
+
+        class SeekForce {
+            public:
+            virtual float2 produceSteeringVector(Boid::BoidFlock const& flock, Boid::ptr_t const& actor) const {
+                float2 target; //select target
+                float2 desiredVelocity;// = linalg::normalize(position - target)
+                float2 steeringVector;// = desired_velocity - velocity
+                return steeringVector;
+            }
+        };
+
+        class ForceManager {
+            public:
+            std::vector<Force::ptr_t> forces;
+            ForceManager() = default;
+            
+            template<typename SpecializedForce, typename ... ConstructorArgumentTypes>
+            void attachForce(ConstructorArgumentTypes...) {
+                forces.push_back(std::make_unique<SpecializedForce>(...));
+            }
+        };
+    }
 
     class MovementSystem : public ecs::System {
         public:
@@ -39,7 +85,7 @@ namespace boid {
         }
     };
 
-    class VirtualSystem : public ecs::System {
+    class RenderingSystem : public ecs::System {
         public:
         virtual void process(ecs::Entity::EntityContainer const& entities) override {
             //TODO: Implement drawing behaviours of boids with SpacialComponents and VisualComponents
