@@ -5,6 +5,10 @@
 #include "lib/linalg.h"
 #include <random> //randomization
 #include <utility> //move
+#include "raylib.h" //renderingsystem
+#include "iostream" //debug messages
+#include <chrono> //random seeding
+#include <algorithm> //for_each
 
 namespace boid {
     using namespace linalg::aliases;
@@ -30,7 +34,7 @@ namespace boid {
     class Boid { // : public ecs::Entity {
         public:
         using ptr_t = std::shared_ptr<Boid>;
-        using BoidFlock = std::vector<Boid::ptr_t>;
+        using Flock = std::vector<Boid::ptr_t>;
 
         SpacialComponent spacialInfo;
         VisualComponent visualInfo;
@@ -38,11 +42,11 @@ namespace boid {
         Boid() = default;
 
         inline void setPosition(float2 xy) { spacialInfo.pos = xy; }
-        inline void setRandomPosition(float2 width_height_limits) {
-            std::default_random_engine generator;
-            std::uniform_real_distribution<float> distribution(width_height_limits.x, width_height_limits.y);
-            float genX = distribution(generator);
-            float genY = distribution(generator);
+        inline void setRandomPosition(std::mt19937& generator, 
+            std::uniform_real_distribution<float>& distributionX, 
+            std::uniform_real_distribution<float>& distributionY) {
+            float genX = distributionX(generator);
+            float genY = distributionY(generator);
             spacialInfo.pos = float2(genX, genY);
         }
     };
@@ -51,13 +55,14 @@ namespace boid {
         class Force {
             public:
             using ptr_t = std::unique_ptr<Force>;
-            virtual float2 produceSteeringVector(Boid::BoidFlock const& flock, Boid::ptr_t const& actor) const = 0;
+            virtual float2 produceSteeringVector(Boid::Flock const& flock, Boid::ptr_t const& actor) const = 0;
             virtual ~Force() = default;
         };
 
-        class SeekForce {
+        class SeekForce : public Force {
             public:
-            virtual float2 produceSteeringVector(Boid::BoidFlock const& flock, Boid::ptr_t const& actor) const {
+            SeekForce() : Force() {}
+            virtual float2 produceSteeringVector(Boid::Flock const& flock, Boid::ptr_t const& actor) const override {
                 float2 target; //select target
                 float2 desiredVelocity;// = linalg::normalize(position - target)
                 float2 steeringVector;// = desired_velocity - velocity
@@ -73,23 +78,47 @@ namespace boid {
             //Attach a new instance of a specified force with any number of constructor arguments
             template<typename SpecializedForce, typename ... ConstructorArgumentTypes>
             void attachForce(ConstructorArgumentTypes... constructorArguments) {
-                forces.push_back(std::make_unique<SpecializedForce>(constructorArguments...));
+                forces.emplace_back(std::make_unique<SpecializedForce>(constructorArguments...));
+            }
+
+            //Attach a new instance of a specified force with default construction
+            template<typename SpecializedForce>
+            void attachForce() {
+                forces.emplace_back(std::make_unique<SpecializedForce>());
             }
         };
     }
 
+    namespace detail {
+        //Conversion function to turn linalg vector into a raylib vector
+        Vector2 compat(linalg::aliases::float2 const& vect) { return Vector2{vect.x, vect.y}; }
+    }
+
     class MovementSystem : public ecs::System {
         public:
+        forces::ForceManager forceManager;
+        MovementSystem() {
+            using namespace boid::forces;
+            forceManager.attachForce<SeekForce>();
+        }
         //TODO: May need to keep screensize information as member attributes that are initialized at construction
         virtual void process(ecs::Entity::EntityContainer const& entities) override {
             //TODO: Implement movement mehaviour of boids with SpacialComponents, rules for alignment, separation, cohesion may need to be a separate system
         }
     };
 
+    
     class RenderingSystem : public ecs::System {
         public:
         virtual void process(ecs::Entity::EntityContainer const& entities) override {
             //TODO: Implement drawing behaviours of boids with SpacialComponents and VisualComponents
+        }
+
+        inline void render(Boid::Flock const& flock) const {
+            using namespace detail;
+            for (Boid::ptr_t const& boidp : flock) {
+                DrawCircleV(compat(boidp->spacialInfo.pos), 5, boidp->visualInfo.showDebugInfo ? RED : BLACK);
+            }
         }
     };
 
@@ -97,11 +126,37 @@ namespace boid {
         public:
         float2 modelDimensions;
 
+        Boid::Flock flock;
+
+        MovementSystem movementSystem;
+        RenderingSystem renderingSystem;
+
+        //Mersenne twister generator
+        std::mt19937 generator;
+        std::uniform_real_distribution<float> distributionX;
+        std::uniform_real_distribution<float> distributionY;
+
         BoidModel() = delete;
-        BoidModel(float2 worldDimensions) : modelDimensions(worldDimensions) {};
+        BoidModel(float2 worldDimensions) : modelDimensions(worldDimensions) {
+            //std::random_device rd;
+            generator = std::mt19937(std::random_device()());
+            
+            distributionX = std::uniform_real_distribution<float>(0, modelDimensions.x);
+            distributionY = std::uniform_real_distribution<float>(0, modelDimensions.y);
+
+            for (int x = 0; x < 10; x++) {
+                flock.push_back(std::move(std::make_shared<Boid>()));
+            }
+            std::for_each(flock.begin(), flock.end(), [this](Boid::ptr_t& boidp)->void{boidp->setRandomPosition(generator, distributionX, distributionY);});
+
+            flock[0]->spacialInfo.pos = float2(modelDimensions.x/2.0f, modelDimensions.y/2.0f);
+            flock[0]->visualInfo.showDebugInfo = true;
+            for(auto bp : flock)
+                std::cout << bp->spacialInfo.pos.x << "," << bp->spacialInfo.pos.y << std::endl;
+        };
 
         inline void updateModel(float frametime) {}
-        inline void renderModel() const {}
+        inline void renderModel() const { renderingSystem.render(flock); }
     };
 }
 
