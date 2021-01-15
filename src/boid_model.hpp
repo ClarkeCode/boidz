@@ -24,7 +24,7 @@ namespace boid {
         int debugLevel;
         bool isDisplayable, showDebugInfo;
 
-        VisualComponent() : isDisplayable(true), showDebugInfo(false), debugLevel(0) {}
+        VisualComponent() : debugLevel(0), isDisplayable(true), showDebugInfo(false) {}
     };
 
     class Boid { // : public ecs::Entity {
@@ -70,9 +70,10 @@ namespace boid {
             std::vector<Force::ptr_t> forces;
             ForceManager() = default;
             
+            //Attach a new instance of a specified force with any number of constructor arguments
             template<typename SpecializedForce, typename ... ConstructorArgumentTypes>
-            void attachForce(ConstructorArgumentTypes...) {
-                forces.push_back(std::make_unique<SpecializedForce>(...));
+            void attachForce(ConstructorArgumentTypes... constructorArguments) {
+                forces.push_back(std::make_unique<SpecializedForce>(constructorArguments...));
             }
         };
     }
@@ -92,6 +93,16 @@ namespace boid {
         }
     };
 
+    class BoidModel {
+        public:
+        float2 modelDimensions;
+
+        BoidModel() = delete;
+        BoidModel(float2 worldDimensions) : modelDimensions(worldDimensions) {};
+
+        inline void updateModel(float frametime) {}
+        inline void renderModel() const {}
+    };
 }
 
 #endif
