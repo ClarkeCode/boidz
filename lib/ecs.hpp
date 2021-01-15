@@ -3,7 +3,9 @@
 #ifndef ECS_HEADER
 #define ECS_HEADER
 #include <vector>
-
+#include <memory>//smart pointers
+#include <optional>//std optional
+#include <algorithm>//findif
 namespace ecs {
     
     template<class PotentialSubclass, class BaseClass>
@@ -13,7 +15,7 @@ namespace ecs {
 
     class Component {
         public:
-        using ptr_t = Component*;
+        using ptr_t = std::shared_ptr<Component>;
         using ComponentContainer = std::vector<Component::ptr_t>;
 
         virtual ~Component() = default;
@@ -21,10 +23,15 @@ namespace ecs {
 
     class Entity {
         public:
-        using ptr_t = Entity*;
+        using ptr_t = std::shared_ptr<Entity>;
         using EntityContainer = std::vector<Entity>;
         int id;
         Component::ComponentContainer components;
+
+        template <class DesiredComponentType>
+        Component::ptr_t getComponent() const {
+            return std::find_if(components.cbegin(), components.cend(), isSubclass<DesiredComponentType, Component>);
+        }
 
         Entity() {}
         Entity(int startingCapacity) { components.reserve(startingCapacity); }
