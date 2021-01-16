@@ -42,6 +42,8 @@ namespace boid {
 
         Boid() = default;
         inline void setPosition(float2 xy) { spacialInfo.pos = xy; }
+        inline float getPosX() const { return spacialInfo.pos.x; }
+        inline float getPosY() const { return spacialInfo.pos.y; }
     };
 
     namespace forces {
@@ -87,23 +89,41 @@ namespace boid {
         //Conversion function to turn linalg vector into a raylib vector
         Vector2 compat(linalgvec2 const& vect) { return Vector2{vect.x, vect.y}; }
         //Produces linalg vector from a radian angle
-        linalgvec2 produceUnitVector(float radianAngle) { return linalgvec2(cosf(radianAngle), sinf(radianAngle)); }
+        float2 produceUnitVector(float radianAngle) { return float2(cosf(radianAngle), sinf(radianAngle)); }
         //Produce a linalg position vector where vector is {0-maxX, 0-maxY}
-        linalgvec2 produceRandomPos(randutil::RandomNumberFactory<>& randomer, float maxX, float maxY) { 
-            return linalgvec2(randomer.produceRandom<float>(0.0f, maxX), randomer.produceRandom<float>(0.0f, maxY));
+        float2 produceRandomPos(randutil::RandomNumberFactory<>& randomer, float maxX, float maxY) {
+            return float2(randomer.produceRandom<float>(0.0f, maxX), randomer.produceRandom<float>(0.0f, maxY));
         }
     }
 
     class MovementSystem : public ecs::System {
         public:
+        bool positionLimitWrapping;
+        float2 limitsXY;
         forces::ForceManager forceManager;
-        MovementSystem() {
+        MovementSystem() : positionLimitWrapping(true) {
             using namespace boid::forces;
             forceManager.attachForce<SeekForce>();
         }
         //TODO: May need to keep screensize information as member attributes that are initialized at construction
         virtual void process(ecs::Entity::EntityContainer const& entities) override {
             //TODO: Implement movement mehaviour of boids with SpacialComponents, rules for alignment, separation, cohesion may need to be a separate system
+        }
+
+        inline void process(Boid::Flock const& flock, float frametime) {
+            //Set forces
+
+            //Apply Euler-integration style movement
+            std::for_each(flock.begin(), flock.end(), [this, frametime](Boid::ptr_t const& boidp)->void{
+                boidp->spacialInfo.vel += frametime * boidp->spacialInfo.acc;
+                boidp->spacialInfo.pos += frametime * boidp->spacialInfo.vel;
+                if (positionLimitWrapping) {
+                    if (boidp->getPosX() < 0) boidp->spacialInfo.pos.x = limitsXY.x;
+                    if (boidp->getPosY() < 0) boidp->spacialInfo.pos.y = limitsXY.y;
+                    if (boidp->getPosX() > limitsXY.x) boidp->spacialInfo.pos.x = 0.0f;
+                    if (boidp->getPosY() > limitsXY.y) boidp->spacialInfo.pos.y = 0.0f;
+                }
+            });
         }
     };
 
@@ -118,7 +138,7 @@ namespace boid {
             using namespace detail;
             for (Boid::ptr_t const& boidp : flock) {
                 DrawCircleV(compat(boidp->spacialInfo.pos), 5, boidp->visualInfo.showDebugInfo ? RED : BLACK);
-                DrawLineEx(compat(boidp->spacialInfo.pos), compat(boidp->spacialInfo.pos + (30 * boidp->spacialInfo.vel)), 1, BLACK);
+                DrawLineEx(compat(boidp->spacialInfo.pos), compat(boidp->spacialInfo.pos + (boidp->spacialInfo.vel)), 1, BLACK);
             }
         }
     };
@@ -137,6 +157,7 @@ namespace boid {
         BoidModel() = delete;
         BoidModel(float2 worldDimensions) : modelDimensions(worldDimensions) {
             randutil::RandomNumberFactory<> randomFactory;
+            movementSystem.limitsXY = modelDimensions;
             
             for (int x = 0; x < 10; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
 
@@ -149,7 +170,7 @@ namespace boid {
             flock[0]->visualInfo.showDebugInfo = true;
         };
 
-        inline void updateModel(float frametime) {}
+        inline void updateModel(float frametime) { movementSystem.process(flock, frametime); }
         inline void renderModel() const { renderingSystem.render(flock); }
     };
 }
