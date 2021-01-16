@@ -3,12 +3,13 @@
 #include <vector>
 #include "lib/ecs.hpp"
 #include "lib/linalg.h"
-#include <random> //randomization
-#include <utility> //move
-#include "raylib.h" //renderingsystem
-#include "iostream" //debug messages
-#include <chrono> //random seeding
-#include <algorithm> //for_each
+
+//TODO: Following includes should be moved into cpp implementation file(s)
+#include "lib/random_manager.hpp"   //RandomNumberFactory
+#include "raylib.h"                 //renderingsystem
+#include <utility>                  //move
+#include <algorithm>                //for_each
+#include <cmath>                    //sinf cosf etc
 
 namespace boid {
     using namespace linalg::aliases;
@@ -40,15 +41,7 @@ namespace boid {
         VisualComponent visualInfo;
 
         Boid() = default;
-
         inline void setPosition(float2 xy) { spacialInfo.pos = xy; }
-        inline void setRandomPosition(std::mt19937& generator, 
-            std::uniform_real_distribution<float>& distributionX, 
-            std::uniform_real_distribution<float>& distributionY) {
-            float genX = distributionX(generator);
-            float genY = distributionY(generator);
-            spacialInfo.pos = float2(genX, genY);
-        }
     };
 
     namespace forces {
@@ -90,8 +83,15 @@ namespace boid {
     }
 
     namespace detail {
+        using linalgvec2 = linalg::aliases::float2;
         //Conversion function to turn linalg vector into a raylib vector
-        Vector2 compat(linalg::aliases::float2 const& vect) { return Vector2{vect.x, vect.y}; }
+        Vector2 compat(linalgvec2 const& vect) { return Vector2{vect.x, vect.y}; }
+        //Produces linalg vector from a radian angle
+        linalgvec2 produceUnitVector(float radianAngle) { return linalgvec2(cosf(radianAngle), sinf(radianAngle)); }
+        //Produce a linalg position vector where vector is {0-maxX, 0-maxY}
+        linalgvec2 produceRandomPos(randutil::RandomNumberFactory<>& randomer, float maxX, float maxY) { 
+            return linalgvec2(randomer.produceRandom<float>(0.0f, maxX), randomer.produceRandom<float>(0.0f, maxY));
+        }
     }
 
     class MovementSystem : public ecs::System {
@@ -118,6 +118,7 @@ namespace boid {
             using namespace detail;
             for (Boid::ptr_t const& boidp : flock) {
                 DrawCircleV(compat(boidp->spacialInfo.pos), 5, boidp->visualInfo.showDebugInfo ? RED : BLACK);
+                DrawLineEx(compat(boidp->spacialInfo.pos), compat(boidp->spacialInfo.pos + (30 * boidp->spacialInfo.vel)), 1, BLACK);
             }
         }
     };
@@ -131,28 +132,21 @@ namespace boid {
         MovementSystem movementSystem;
         RenderingSystem renderingSystem;
 
-        //Mersenne twister generator
-        std::mt19937 generator;
-        std::uniform_real_distribution<float> distributionX;
-        std::uniform_real_distribution<float> distributionY;
+        randutil::RandomNumberFactory<float> randomManager;
 
         BoidModel() = delete;
         BoidModel(float2 worldDimensions) : modelDimensions(worldDimensions) {
-            //std::random_device rd;
-            generator = std::mt19937(std::random_device()());
+            randutil::RandomNumberFactory<> randomFactory;
             
-            distributionX = std::uniform_real_distribution<float>(0, modelDimensions.x);
-            distributionY = std::uniform_real_distribution<float>(0, modelDimensions.y);
+            for (int x = 0; x < 10; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
 
-            for (int x = 0; x < 10; x++) {
-                flock.push_back(std::move(std::make_shared<Boid>()));
-            }
-            std::for_each(flock.begin(), flock.end(), [this](Boid::ptr_t& boidp)->void{boidp->setRandomPosition(generator, distributionX, distributionY);});
+            std::for_each(flock.begin(), flock.end(), [this, randomFactory](Boid::ptr_t& boidp)mutable->void{
+                boidp->setPosition(detail::produceRandomPos(randomFactory, modelDimensions.x, modelDimensions.y));
+                boidp->spacialInfo.vel = boidp->spacialInfo.maxSpeed * detail::produceUnitVector(randomFactory.produceRandom<float>(0.0f, 2.0f*3.14159f));
+            });
 
             flock[0]->spacialInfo.pos = float2(modelDimensions.x/2.0f, modelDimensions.y/2.0f);
             flock[0]->visualInfo.showDebugInfo = true;
-            for(auto bp : flock)
-                std::cout << bp->spacialInfo.pos.x << "," << bp->spacialInfo.pos.y << std::endl;
         };
 
         inline void updateModel(float frametime) {}
