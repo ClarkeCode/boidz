@@ -44,42 +44,73 @@ namespace boid {
         inline void setPosition(float2 xy) { spacialInfo.pos = xy; }
         inline float getPosX() const { return spacialInfo.pos.x; }
         inline float getPosY() const { return spacialInfo.pos.y; }
+        inline float2 getPos() const { return spacialInfo.pos; }
+        inline float2 getVel() const { return spacialInfo.vel; }
+        inline float2 getAcc() const { return spacialInfo.acc; }
     };
 
     namespace forces {
         class Force {
             public:
             using ptr_t = std::unique_ptr<Force>;
+            float weight;
             virtual float2 produceSteeringVector(Boid::Flock const& flock, Boid::ptr_t const& actor) const = 0;
+            Force(float chosenWeight = 1.0f) : weight(chosenWeight) {}
             virtual ~Force() = default;
         };
 
-        class SeekForce : public Force {
+        class SeparatorForce : public Force {
             public:
-            SeekForce() : Force() {}
+            float desiredSeparation;
+            SeparatorForce(float separationRadius, float desiredWeight = 1.0f) : Force(desiredWeight), desiredSeparation(separationRadius) {}
             virtual float2 produceSteeringVector(Boid::Flock const& flock, Boid::ptr_t const& actor) const override {
-                float2 target; //select target
-                float2 desiredVelocity;// = linalg::normalize(position - target)
-                float2 steeringVector;// = desired_velocity - velocity
+                float2 steeringVector(0.0f);
+                linalg::aliases::float2 desiredVelocity(0.0f);
+
+                for(Boid::ptr_t const& otherBoid : flock) {
+                    float dist = distance(actor->getPos(), otherBoid->getPos());
+                    if (dist > 0.0f && dist < desiredSeparation) {
+                        //renolds 1999 separation behaviour: favour closer neighbours more heavily
+                        desiredVelocity += linalg::normalize(actor->getPos() - otherBoid->getPos()) / dist * dist;
+                    }
+                }
+
+                if (linalg::length(desiredVelocity) != 0.0f) {
+                    //Scale desired velocity to be at maximum speed of the boid
+                    desiredVelocity = actor->spacialInfo.maxSpeed * linalg::normalize(desiredVelocity);
+                    steeringVector = desiredVelocity - actor->spacialInfo.vel;// = desired_velocity - current_velocity
+                }
                 return steeringVector;
             }
         };
 
         class ForceManager {
             public:
-            std::vector<Force::ptr_t> forces;
+            std::vector<Force::ptr_t> attachedForces;
             ForceManager() = default;
+
+            //Applies all attached forces to the provided boid flock
+            //Note: Function is O(n^3) due to calling Force::produceSteeringVector function
+            inline void applyForces(Boid::Flock const& flock) const {
+                //std::for_each(flock.begin(), flock.end(), [](Boid::ptr_t const& currentBoid)->void{currentBoid->spacialInfo.acc = float2(0.0f);});
+                std::for_each(flock.begin(), flock.end(), [this, &flock](Boid::ptr_t const& currentBoid)->void{
+                    currentBoid->spacialInfo.acc = float2(0.0f);
+                    std::for_each(attachedForces.begin(), attachedForces.end(), [this, &flock, &currentBoid](Force::ptr_t const& currentForce)->void{
+                        currentBoid->spacialInfo.acc += currentForce->weight * currentForce->produceSteeringVector(flock, currentBoid);
+                    });
+                });
+            }
             
             //Attach a new instance of a specified force with any number of constructor arguments
             template<typename SpecializedForce, typename ... ConstructorArgumentTypes>
             void attachForce(ConstructorArgumentTypes... constructorArguments) {
-                forces.emplace_back(std::make_unique<SpecializedForce>(constructorArguments...));
+                attachedForces.emplace_back(std::make_unique<SpecializedForce>(constructorArguments...));
             }
 
             //Attach a new instance of a specified force with default construction
             template<typename SpecializedForce>
             void attachForce() {
-                forces.emplace_back(std::make_unique<SpecializedForce>());
+                attachedForces.emplace_back(std::make_unique<SpecializedForce>());
             }
         };
     }
@@ -103,7 +134,7 @@ namespace boid {
         forces::ForceManager forceManager;
         MovementSystem() : positionLimitWrapping(true) {
             using namespace boid::forces;
-            forceManager.attachForce<SeekForce>();
+            forceManager.attachForce<SeparatorForce>(50.0f);
         }
         //TODO: May need to keep screensize information as member attributes that are initialized at construction
         virtual void process(ecs::Entity::EntityContainer const& entities) override {
@@ -111,7 +142,8 @@ namespace boid {
         }
 
         inline void process(Boid::Flock const& flock, float frametime) {
-            //Set forces
+            //Apply forces to each member of the flock
+            forceManager.applyForces(flock);
 
             //Apply Euler-integration style movement
             std::for_each(flock.begin(), flock.end(), [this, frametime](Boid::ptr_t const& boidp)->void{
@@ -139,6 +171,10 @@ namespace boid {
             for (Boid::ptr_t const& boidp : flock) {
                 DrawCircleV(compat(boidp->spacialInfo.pos), 5, boidp->visualInfo.showDebugInfo ? RED : BLACK);
                 DrawLineEx(compat(boidp->spacialInfo.pos), compat(boidp->spacialInfo.pos + (boidp->spacialInfo.vel)), 1, BLACK);
+
+                if (boidp->visualInfo.showDebugInfo) {
+                    DrawLineEx(compat(boidp->spacialInfo.pos), compat(boidp->spacialInfo.pos + (boidp->spacialInfo.acc)), 1, GREEN);
+                }
             }
         }
     };
@@ -159,7 +195,7 @@ namespace boid {
             randutil::RandomNumberFactory<> randomFactory;
             movementSystem.limitsXY = modelDimensions;
             
-            for (int x = 0; x < 10; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
+            for (int x = 0; x < 20; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
 
             std::for_each(flock.begin(), flock.end(), [this, randomFactory](Boid::ptr_t& boidp)mutable->void{
                 boidp->setPosition(detail::produceRandomPos(randomFactory, modelDimensions.x, modelDimensions.y));
