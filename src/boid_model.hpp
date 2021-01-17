@@ -13,6 +13,30 @@
 
 namespace boid {
     using namespace linalg::aliases;
+
+    namespace detail {
+        using linalgvec2 = linalg::aliases::float2;
+        //Conversion function to turn linalg vector into a raylib vector
+        Vector2 compat(linalgvec2 const& vect) { return Vector2{vect.x, vect.y}; }
+        //Produces linalg vector from a radian angle
+        float2 produceUnitVector(float radianAngle) { return float2(cosf(radianAngle), sinf(radianAngle)); }
+        //Produce a linalg position vector where vector is {0-maxX, 0-maxY}
+        float2 produceRandomPos(randutil::RandomNumberFactory<>& randomer, float maxX, float maxY) {
+            return float2(randomer.produceRandom<float>(0.0f, maxX), randomer.produceRandom<float>(0.0f, maxY));
+        }
+        //Normalize function safe for zero-length vectors
+        float2 snormalize(float2 vect) {
+            if (linalg::length(vect) != 0.0f)
+                return linalg::normalize(vect);
+            return vect;
+        }
+        //Ensures a given vector is not longer than the provided maximum length
+        float2 vclamp(float2 vect, float maxVectLength) {
+            if (linalg::length(vect) > maxVectLength)
+                return maxVectLength * snormalize(vect);
+            return vect;
+        }
+    }
     
     class SpacialComponent : public ecs::Component {
         public:
@@ -21,7 +45,7 @@ namespace boid {
         
         SpacialComponent(float2 position, float2 velocity, float2 acceleration, float componentMass, float max_speed, float max_force) : 
             pos(position), vel(velocity), acc(acceleration), mass(componentMass), maxSpeed(max_speed), maxForce(max_force) {}
-        SpacialComponent() : SpacialComponent(float2(0,0), float2(0,0), float2(0,0), 1.0f, 100.0f, 10.0f) {}
+        SpacialComponent() : SpacialComponent(float2(0,0), float2(0,0), float2(0,0), 1.0f, 100.0f, 100.0f) {}
     };
 
     class VisualComponent : public ecs::Component {
@@ -59,6 +83,7 @@ namespace boid {
             virtual ~Force() = default;
         };
 
+        //Gives Boids a force to stay away from neighbouring boids
         class SeparatorForce : public Force {
             public:
             float desiredSeparation;
@@ -71,7 +96,7 @@ namespace boid {
                     float dist = distance(actor->getPos(), otherBoid->getPos());
                     if (dist > 0.0f && dist < desiredSeparation) {
                         //renolds 1999 separation behaviour: favour closer neighbours more heavily
-                        desiredVelocity += linalg::normalize(actor->getPos() - otherBoid->getPos()) / dist * dist;
+                        desiredVelocity += linalg::normalize(actor->getPos() - otherBoid->getPos()) / dist;
                     }
                 }
 
@@ -83,6 +108,22 @@ namespace boid {
                 return steeringVector;
             }
         };
+
+        //Gives Boids a force to continue in the direction they were going
+        class AcceleratorForce : public Force {
+            public:
+            AcceleratorForce(float desiredWeight = 0.1f) : Force(desiredWeight) {}
+            virtual float2 produceSteeringVector(Boid::Flock const&, Boid::ptr_t const& actor) const override {
+                float2 steeringVector = actor->getVel();
+                return steeringVector;
+            }
+        };
+
+        /*
+        TODO: add a distinction between forces to allow for a force to only apply to an individual Boid
+        ie Force -> IndividualForce -> SpecializedIndividualForce (SeekMouse?)
+        Have SIVs take their target information as non-owning pointers on construction, implement produceSteeringVector method by ignoring the parameters
+        */
 
         class ForceManager {
             public:
@@ -115,17 +156,7 @@ namespace boid {
         };
     }
 
-    namespace detail {
-        using linalgvec2 = linalg::aliases::float2;
-        //Conversion function to turn linalg vector into a raylib vector
-        Vector2 compat(linalgvec2 const& vect) { return Vector2{vect.x, vect.y}; }
-        //Produces linalg vector from a radian angle
-        float2 produceUnitVector(float radianAngle) { return float2(cosf(radianAngle), sinf(radianAngle)); }
-        //Produce a linalg position vector where vector is {0-maxX, 0-maxY}
-        float2 produceRandomPos(randutil::RandomNumberFactory<>& randomer, float maxX, float maxY) {
-            return float2(randomer.produceRandom<float>(0.0f, maxX), randomer.produceRandom<float>(0.0f, maxY));
-        }
-    }
+
 
     class MovementSystem : public ecs::System {
         public:
@@ -135,6 +166,7 @@ namespace boid {
         MovementSystem() : positionLimitWrapping(true) {
             using namespace boid::forces;
             forceManager.attachForce<SeparatorForce>(50.0f);
+            forceManager.attachForce<AcceleratorForce>();
         }
         //TODO: May need to keep screensize information as member attributes that are initialized at construction
         virtual void process(ecs::Entity::EntityContainer const& entities) override {
@@ -147,7 +179,9 @@ namespace boid {
 
             //Apply Euler-integration style movement
             std::for_each(flock.begin(), flock.end(), [this, frametime](Boid::ptr_t const& boidp)->void{
+                boidp->spacialInfo.acc = detail::vclamp(boidp->getAcc(), boidp->spacialInfo.maxForce);
                 boidp->spacialInfo.vel += frametime * boidp->spacialInfo.acc;
+                boidp->spacialInfo.vel = detail::vclamp(boidp->getVel(), boidp->spacialInfo.maxSpeed);
                 boidp->spacialInfo.pos += frametime * boidp->spacialInfo.vel;
                 if (positionLimitWrapping) {
                     if (boidp->getPosX() < 0) boidp->spacialInfo.pos.x = limitsXY.x;
