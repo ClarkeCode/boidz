@@ -128,8 +128,33 @@ namespace boid {
                 if (numNeighbourBoid == 0)
                     return float2(0.0f);
                 
-                float2 desiredVelocity = actor->spacialInfo.maxSpeed * detail::snormalize(targetPosition - actor->getPos());
-                float2 steeringVector = actor->spacialInfo.maxForce * detail::snormalize(desiredVelocity - actor->getVel());
+                float2 desiredVelocity = targetPosition - actor->getPos();
+                float2 steeringVector = desiredVelocity - actor->getVel();
+
+                return steeringVector;
+            }
+        };
+
+        class AlignmentForce : public Force {
+            public:
+            float alignmentEffectRadius;
+            AlignmentForce(float alignmentRadius, float desiredWeight = 1.0f) : Force(desiredWeight), alignmentEffectRadius(alignmentRadius) {};
+            virtual float2 produceSteeringVector(Boid::Flock const& flock, Boid::ptr_t const& actor) const override {
+                float2 averageVelocity(0.0f);
+                int numNeighbourBoid = 0;
+                for(Boid::ptr_t const& otherBoid : flock) {
+                    //Neighbour test
+                    float dist = distance(actor->getPos(), otherBoid->getPos());
+                    if (dist > 0.0f && dist < alignmentEffectRadius) {
+                        averageVelocity += otherBoid->getVel();
+                        numNeighbourBoid++;
+                    }
+                }
+                if (numNeighbourBoid == 0)
+                    return float2(0.0f);
+                
+                float2 desiredVelocity = averageVelocity / numNeighbourBoid;
+                float2 steeringVector = desiredVelocity - actor->getVel();
 
                 return steeringVector;
             }
@@ -191,8 +216,9 @@ namespace boid {
         forces::ForceManager forceManager;
         MovementSystem() : positionLimitWrapping(true) {
             using namespace boid::forces;
-            forceManager.attachForce<SeparatorForce>(50.0f);
-            forceManager.attachForce<CohesionForce>(100.0f, 0.6f);
+            forceManager.attachForce<SeparatorForce>(100.0f);
+            forceManager.attachForce<CohesionForce>(100.0f);
+            forceManager.attachForce<AlignmentForce>(100.0f);
             forceManager.attachForce<AcceleratorForce>();
         }
         //TODO: May need to keep screensize information as member attributes that are initialized at construction
