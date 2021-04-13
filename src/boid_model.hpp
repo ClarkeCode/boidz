@@ -16,6 +16,7 @@ namespace boid {
 
     namespace detail {
         using linalgvec2 = linalg::aliases::float2;
+        const float _pi = PI;
         //Conversion function to turn linalg vector into a raylib vector
         Vector2 compat(linalgvec2 const& vect) { return Vector2{vect.x, vect.y}; }
         //Produces linalg vector from a radian angle
@@ -36,16 +37,22 @@ namespace boid {
                 return maxVectLength * snormalize(vect);
             return vect;
         }
+
+        //Conversion function to convert a degree angle to a radian scalar
+        template<typename T = float> T degreeToRadian(T value) { return value * _pi / ((T) 180.0f); }
+        //Conversion function to convert a radian scalar to a degree angle
+        template<typename T = float> T radianToDegree(T value) { return value * ((T) 180.0f) / _pi; }
     }
     
     class SpacialComponent : public ecs::Component {
         public:
         float2 pos, vel, acc;
         float mass, maxSpeed, maxForce;
+        float visionConeDegrees;
         
-        SpacialComponent(float2 position, float2 velocity, float2 acceleration, float componentMass, float max_speed, float max_force) : 
-            pos(position), vel(velocity), acc(acceleration), mass(componentMass), maxSpeed(max_speed), maxForce(max_force) {}
-        SpacialComponent() : SpacialComponent(float2(0,0), float2(0,0), float2(0,0), 1.0f, 100.0f, 100.0f) {}
+        SpacialComponent(float2 position, float2 velocity, float2 acceleration, float componentMass, float max_speed, float max_force, float vision_cone_degree) : 
+            pos(position), vel(velocity), acc(acceleration), mass(componentMass), maxSpeed(max_speed), maxForce(max_force), visionConeDegrees(vision_cone_degree) {}
+        SpacialComponent() : SpacialComponent(float2(0,0), float2(0,0), float2(0,0), 1.0f, 100.0f, 100.0f, 270.0f) {}
     };
 
     class VisualComponent : public ecs::Component {
@@ -71,6 +78,12 @@ namespace boid {
         inline float2 getPos() const { return spacialInfo.pos; }
         inline float2 getVel() const { return spacialInfo.vel; }
         inline float2 getAcc() const { return spacialInfo.acc; }
+        inline bool isWithinVision(Boid::ptr_t otherBoid) const {
+            float2 betweenVec = otherBoid->spacialInfo.pos - this->spacialInfo.pos;
+            float ang = angle(this->getVel(), betweenVec);
+            return !(   ang > (detail::degreeToRadian(this->spacialInfo.visionConeDegrees/2)) && 
+                        ang < (2*3.1415f - detail::degreeToRadian(this->spacialInfo.visionConeDegrees/2)));
+        }
     };
 
     namespace forces {
@@ -95,7 +108,7 @@ namespace boid {
                 for(Boid::ptr_t const& otherBoid : flock) {
                     //Neighbour test
                     float dist = distance(actor->getPos(), otherBoid->getPos());
-                    if (dist > 0.0f && dist < desiredSeparation) {
+                    if (dist > 0.0f && dist < desiredSeparation && actor->isWithinVision(otherBoid)) {
                         //renolds 1999 separation behaviour: favour closer neighbours more heavily
                         desiredVelocity += linalg::normalize(actor->getPos() - otherBoid->getPos()) / dist;
                     }
@@ -120,7 +133,7 @@ namespace boid {
                 for(Boid::ptr_t const& otherBoid : flock) {
                     //Neighbour test
                     float dist = distance(actor->getPos(), otherBoid->getPos());
-                    if (dist > 0.0f && dist < desiredCohesionRadius) {
+                    if (dist > 0.0f && dist < desiredCohesionRadius && actor->isWithinVision(otherBoid)) {
                         targetPosition += otherBoid->getPos();
                         numNeighbourBoid++;
                     }
@@ -145,7 +158,7 @@ namespace boid {
                 for(Boid::ptr_t const& otherBoid : flock) {
                     //Neighbour test
                     float dist = distance(actor->getPos(), otherBoid->getPos());
-                    if (dist > 0.0f && dist < alignmentEffectRadius) {
+                    if (dist > 0.0f && dist < alignmentEffectRadius && actor->isWithinVision(otherBoid)) {
                         averageVelocity += otherBoid->getVel();
                         numNeighbourBoid++;
                     }
@@ -165,7 +178,10 @@ namespace boid {
             public:
             AcceleratorForce(float desiredWeight = 0.1f) : Force(desiredWeight) {}
             virtual float2 produceSteeringVector(Boid::Flock const&, Boid::ptr_t const& actor) const override {
-                float2 steeringVector = actor->getVel();
+                float2 steeringVector;
+                steeringVector = actor->getVel();
+                if (length(steeringVector) < 20.0f)
+                    steeringVector = (detail::snormalize(steeringVector) * 20.0f);
                 return steeringVector;
             }
         };
@@ -216,10 +232,10 @@ namespace boid {
         forces::ForceManager forceManager;
         MovementSystem() : positionLimitWrapping(true) {
             using namespace boid::forces;
-            forceManager.attachForce<SeparatorForce>(100.0f);
-            forceManager.attachForce<CohesionForce>(100.0f);
-            forceManager.attachForce<AlignmentForce>(100.0f);
-            forceManager.attachForce<AcceleratorForce>();
+            forceManager.attachForce<SeparatorForce>(50.0f);
+            forceManager.attachForce<CohesionForce>(100.0f, 0.5f);
+            forceManager.attachForce<AlignmentForce>(100.0f, 0.5f);
+            forceManager.attachForce<AcceleratorForce>(0.3f);
         }
         //TODO: May need to keep screensize information as member attributes that are initialized at construction
         virtual void process(ecs::Entity::EntityContainer const& entities) override {
@@ -261,6 +277,18 @@ namespace boid {
 
                 if (boidp->visualInfo.showDebugInfo) {
                     DrawLineEx(compat(boidp->spacialInfo.pos), compat(boidp->spacialInfo.pos + (boidp->spacialInfo.acc)), 1, GREEN);
+
+                    DrawLineEx(compat(boidp->spacialInfo.pos), compat(
+                        boidp->spacialInfo.pos + linalg::rot(detail::degreeToRadian(boidp->spacialInfo.visionConeDegrees/2), boidp->spacialInfo.vel)), 1, ORANGE);
+                    DrawLineEx(compat(boidp->spacialInfo.pos), compat(
+                        boidp->spacialInfo.pos + linalg::rot(2*3.1415f - detail::degreeToRadian(boidp->spacialInfo.visionConeDegrees/2), boidp->spacialInfo.vel)), 1, PURPLE);
+
+                    for (Boid::ptr_t const& other : flock) {
+                        if (boidp->isWithinVision(other) && distance(boidp->getPos(), other->getPos()) < 100 ) {
+                            DrawLineEx(compat(boidp->getPos()), compat(other->getPos()), 1, GRAY);
+                        }
+                    }
+                    // DrawCircleSectorLines(compat(boidp->spacialInfo.pos), 100.0f, 0.0f, boidp->spacialInfo.visionConeDegrees, 8, BLACK);
                 }
             }
         }
