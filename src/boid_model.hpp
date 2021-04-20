@@ -87,6 +87,7 @@ namespace boid {
         VisualComponent visualInfo;
 
         Boid() = default;
+        Boid(float2 startPosition, float2 startVelocity) { setPosition(startPosition); spacialInfo.vel = startVelocity; }
         inline void setPosition(float2 xy) { spacialInfo.pos = xy; }
         inline float getPosX() const { return spacialInfo.pos.x; }
         inline float getPosY() const { return spacialInfo.pos.y; }
@@ -346,6 +347,16 @@ namespace boid {
                     boidp->spacialInfo.vel = boidp->spacialInfo.maxSpeed * detail::produceUnitVector(randomFactory.produceRandom<float>(0.0f, 2.0f*detail::_pi));
                 });
             }
+        }
+
+        inline void addBoids(int boids) {
+            randutil::RandomNumberFactory<> randomFactory;
+            while (boids-- > 0)
+                flock.push_back(std::move(std::make_shared<Boid>(modelDimensions/2.0f, detail::produceUnitVector(randomFactory.produceRandom<float>(0.0f, 2.0f*detail::_pi)))));
+        }
+        inline void removeBoids(int boids) {
+            while (boids-- > 0) 
+                if (flock.size() > 0) flock.pop_back();
         }
 
         inline void updateModel(float frametime) {

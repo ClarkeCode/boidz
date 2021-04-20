@@ -17,6 +17,8 @@ void updateGameState(boid::BoidModel& model){
     if (IsKeyDown(KEY_R)) {
         model.resetPositions();
     }
+    if (IsKeyReleased(KEY_KP_ADD) || IsKeyReleased(KEY_EQUAL)) { model.addBoids(1); }
+    if (IsKeyReleased(KEY_KP_SUBTRACT) || IsKeyReleased(KEY_MINUS)) { model.removeBoids(1); }
 
     model.updateModel(frameTime);
 }
