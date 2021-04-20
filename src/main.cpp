@@ -13,6 +13,11 @@ Camera2D setupCamera(linalg::aliases::float2& gw) {
 
 void updateGameState(boid::BoidModel& model){
     float frameTime = GetFrameTime();
+
+    if (IsKeyDown(KEY_R)) {
+        model.resetPositions();
+    }
+
     model.updateModel(frameTime);
 }
 

@@ -19,6 +19,8 @@ namespace boid {
         const float _pi = PI;
         //Conversion function to turn linalg vector into a raylib vector
         Vector2 compat(linalgvec2 const& vect) { return Vector2{vect.x, vect.y}; }
+        //Conversion function to turn 4-length linalg bytevector into a raylib Color
+        Color compatColour(byte4 const& vect4) { return (Color){vect4.x, vect4.y, vect4.z, vect4.w}; }
         //Produces linalg vector from a radian angle
         float2 produceUnitVector(float radianAngle) { return float2(cosf(radianAngle), sinf(radianAngle)); }
         //Produce a linalg position vector where vector is {0-maxX, 0-maxY}
@@ -42,6 +44,18 @@ namespace boid {
         template<typename T = float> T degreeToRadian(T value) { return value * _pi / ((T) 180.0f); }
         //Conversion function to convert a radian scalar to a degree angle
         template<typename T = float> T radianToDegree(T value) { return value * ((T) 180.0f) / _pi; }
+
+        //Return value is guaranteed to be greater or equal to the limit
+        template<typename T = float>
+        T constrainAbove(T value, T lowerLimit) { return (value < lowerLimit) ? lowerLimit : value; }
+
+        //Return value is guaranteed to be less than or equal to the limit
+        template<typename T = float>
+        T constrainBelow(T value, T upperLimit) { return (value > upperLimit) ? upperLimit : value; }
+
+        //Return value is guaranteed to be within the inclusive range [lowerLimit, upperLimit]
+        template<typename T = float>
+        T constrainWithin(T value, T lowerLimit, T upperLimit) { return constrainAbove<T>(constrainBelow<T>(value, upperLimit), lowerLimit); }
     }
     
     class SpacialComponent : public ecs::Component {
@@ -52,15 +66,16 @@ namespace boid {
         
         SpacialComponent(float2 position, float2 velocity, float2 acceleration, float componentMass, float max_speed, float max_force, float vision_cone_degree) : 
             pos(position), vel(velocity), acc(acceleration), mass(componentMass), maxSpeed(max_speed), maxForce(max_force), visionConeDegrees(vision_cone_degree) {}
-        SpacialComponent() : SpacialComponent(float2(0,0), float2(0,0), float2(0,0), 1.0f, 100.0f, 100.0f, 270.0f) {}
+        SpacialComponent() : SpacialComponent(float2(0,0), float2(0,0), float2(0,0), 2.0f, 100.0f, 100.0f, 270.0f) {}
     };
 
     class VisualComponent : public ecs::Component {
         public:
         int debugLevel;
         bool isDisplayable, showDebugInfo;
+        byte4 borderColour, fillColour;
 
-        VisualComponent() : debugLevel(0), isDisplayable(true), showDebugInfo(false) {}
+        VisualComponent() : debugLevel(0), isDisplayable(true), showDebugInfo(false), borderColour(0,0,0,255), fillColour(128,128,128,255) {}
     };
 
     class Boid { // : public ecs::Entity {
@@ -248,7 +263,7 @@ namespace boid {
 
             //Apply Euler-integration style movement
             std::for_each(flock.begin(), flock.end(), [this, frametime](Boid::ptr_t const& boidp)->void{
-                boidp->spacialInfo.acc = detail::vclamp(boidp->getAcc(), boidp->spacialInfo.maxForce);
+                boidp->spacialInfo.acc = detail::vclamp(boidp->getAcc() / boidp->spacialInfo.mass, boidp->spacialInfo.maxForce);
                 boidp->spacialInfo.vel += frametime * boidp->spacialInfo.acc;
                 boidp->spacialInfo.vel = detail::vclamp(boidp->getVel(), boidp->spacialInfo.maxSpeed);
                 boidp->spacialInfo.pos += frametime * boidp->spacialInfo.vel;
@@ -272,7 +287,7 @@ namespace boid {
         inline void render(Boid::Flock const& flock) const {
             using namespace detail;
             for (Boid::ptr_t const& boidp : flock) {
-                DrawCircleV(compat(boidp->spacialInfo.pos), 5, boidp->visualInfo.showDebugInfo ? RED : BLACK);
+                DrawCircleV(compat(boidp->spacialInfo.pos), 5, compatColour(boidp->visualInfo.fillColour));
                 DrawLineEx(compat(boidp->spacialInfo.pos), compat(boidp->spacialInfo.pos + (boidp->spacialInfo.vel)), 1, BLACK);
 
                 if (boidp->visualInfo.showDebugInfo) {
@@ -303,25 +318,40 @@ namespace boid {
         MovementSystem movementSystem;
         RenderingSystem renderingSystem;
 
+        //Amount of time in seconds before the model will allow another command to be executed
+        float modelCommandCooldown;
+
         randutil::RandomNumberFactory<float> randomManager;
 
         BoidModel() = delete;
         BoidModel(float2 worldDimensions) : modelDimensions(worldDimensions) {
-            randutil::RandomNumberFactory<> randomFactory;
             movementSystem.limitsXY = modelDimensions;
+            modelCommandCooldown = 0.0f;
             
             for (int x = 0; x < 20; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
 
-            std::for_each(flock.begin(), flock.end(), [this, randomFactory](Boid::ptr_t& boidp)mutable->void{
-                boidp->setPosition(detail::produceRandomPos(randomFactory, modelDimensions.x, modelDimensions.y));
-                boidp->spacialInfo.vel = boidp->spacialInfo.maxSpeed * detail::produceUnitVector(randomFactory.produceRandom<float>(0.0f, 2.0f*3.14159f));
-            });
+            this->resetPositions();
 
             flock[0]->spacialInfo.pos = float2(modelDimensions.x/2.0f, modelDimensions.y/2.0f);
             flock[0]->visualInfo.showDebugInfo = true;
+            flock[0]->visualInfo.fillColour = {255, 0, 0, 255};
         };
 
-        inline void updateModel(float frametime) { movementSystem.process(flock, frametime); }
+        inline void resetPositions() {
+            if (modelCommandCooldown == 0)  {
+                modelCommandCooldown = .66f;
+                randutil::RandomNumberFactory<> randomFactory;
+                std::for_each(flock.begin(), flock.end(), [this, randomFactory](Boid::ptr_t& boidp)mutable->void{
+                    boidp->setPosition(detail::produceRandomPos(randomFactory, modelDimensions.x, modelDimensions.y));
+                    boidp->spacialInfo.vel = boidp->spacialInfo.maxSpeed * detail::produceUnitVector(randomFactory.produceRandom<float>(0.0f, 2.0f*detail::_pi));
+                });
+            }
+        }
+
+        inline void updateModel(float frametime) {
+            modelCommandCooldown = detail::constrainAbove(modelCommandCooldown - frametime, 0.0f);
+            movementSystem.process(flock, frametime);
+        }
         inline void renderModel() const { renderingSystem.render(flock); }
     };
 }
