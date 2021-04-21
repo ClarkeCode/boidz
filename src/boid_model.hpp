@@ -10,6 +10,7 @@
 #include <utility>                  //move
 #include <algorithm>                //for_each
 #include <cmath>                    //sinf cosf etc
+#include <iostream>                 //Console logging for debug
 
 namespace boid {
     using namespace linalg::aliases;
@@ -66,7 +67,7 @@ namespace boid {
         
         SpacialComponent(float2 position, float2 velocity, float2 acceleration, float componentMass, float max_speed, float max_force, float vision_cone_degree) : 
             pos(position), vel(velocity), acc(acceleration), mass(componentMass), maxSpeed(max_speed), maxForce(max_force), visionConeDegrees(vision_cone_degree) {}
-        SpacialComponent() : SpacialComponent(float2(0,0), float2(0,0), float2(0,0), 2.0f, 100.0f, 100.0f, 270.0f) {}
+        SpacialComponent() : SpacialComponent(float2(0,0), float2(0,0), float2(0,0), 1.5f, 200.0f, 150.0f, 270.0f) {}
     };
 
     class VisualComponent : public ecs::Component {
@@ -239,7 +240,17 @@ namespace boid {
         };
     }
 
-
+    //Forward Declaration
+    class BoidModel;
+    float2 doSeek(Boid::ptr_t boidp, float2 targetPos) {
+        float2 desiredVel = normalize(targetPos - boidp->getPos()) * boidp->spacialInfo.maxSpeed;
+        float2 steeringVector = desiredVel - boidp->getVel();
+        if (linalg::length(steeringVector) > boidp->spacialInfo.maxForce) {
+            steeringVector = normalize(steeringVector) * boidp->spacialInfo.maxForce;
+        }
+        //std::cout << steeringVector.x << " " << steeringVector.y << std::endl;
+        return steeringVector;
+    }
 
     class MovementSystem : public ecs::System {
         public:
@@ -258,9 +269,12 @@ namespace boid {
             //TODO: Implement movement mehaviour of boids with SpacialComponents, rules for alignment, separation, cohesion may need to be a separate system
         }
 
-        inline void process(Boid::Flock const& flock, float frametime) {
+        inline void process(float frametime, float2 const& mousePos, Boid::Flock & flock) {
             //Apply forces to each member of the flock
-            forceManager.applyForces(flock);
+            //forceManager.applyForces(flock);
+
+            flock[0]->spacialInfo.acc = float2(0.0f);
+            flock[0]->spacialInfo.acc = doSeek(flock[0], mousePos);
 
             //Apply Euler-integration style movement
             std::for_each(flock.begin(), flock.end(), [this, frametime](Boid::ptr_t const& boidp)->void{
@@ -292,7 +306,7 @@ namespace boid {
                 DrawLineEx(compat(boidp->spacialInfo.pos), compat(boidp->spacialInfo.pos + (boidp->spacialInfo.vel)), 1, BLACK);
 
                 if (boidp->visualInfo.showDebugInfo) {
-                    DrawLineEx(compat(boidp->spacialInfo.pos), compat(boidp->spacialInfo.pos + (boidp->spacialInfo.acc)), 1, GREEN);
+                    DrawLineEx(compat(boidp->getPos()+boidp->getVel()), compat(boidp->getPos()+boidp->getVel() + (boidp->spacialInfo.acc)), 1, GREEN);
 
                     DrawLineEx(compat(boidp->spacialInfo.pos), compat(
                         boidp->spacialInfo.pos + linalg::rot(detail::degreeToRadian(boidp->spacialInfo.visionConeDegrees/2), boidp->spacialInfo.vel)), 1, ORANGE);
@@ -331,7 +345,7 @@ namespace boid {
             movementSystem.limitsXY = modelDimensions;
             modelCommandCooldown = 0.0f;
             
-            for (int x = 0; x < 20; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
+            for (int x = 0; x < 1; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
 
             this->resetPositions();
 
@@ -364,7 +378,7 @@ namespace boid {
         inline void updateModel(float frametime, float2 mouseLocation) {
             mousePosition = mouseLocation;
             modelCommandCooldown = detail::constrainAbove(modelCommandCooldown - frametime, 0.0f);
-            movementSystem.process(flock, frametime);
+            movementSystem.process(frametime, mousePosition, flock);
         }
         inline void renderModel() const { renderingSystem.render(flock); }
     };
