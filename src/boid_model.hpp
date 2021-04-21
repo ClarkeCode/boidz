@@ -95,11 +95,14 @@ namespace boid {
         inline float2 getPos() const { return spacialInfo.pos; }
         inline float2 getVel() const { return spacialInfo.vel; }
         inline float2 getAcc() const { return spacialInfo.acc; }
-        inline bool isWithinVision(Boid::ptr_t otherBoid) const {
-            float2 betweenVec = otherBoid->spacialInfo.pos - this->spacialInfo.pos;
+        inline bool isWithinVision(float2 const& queriedPosition) const {
+            float2 betweenVec = queriedPosition - this->spacialInfo.pos;
             float ang = angle(this->getVel(), betweenVec);
             return !(   ang > (detail::degreeToRadian(this->spacialInfo.visionConeDegrees/2)) && 
                         ang < (2*3.1415f - detail::degreeToRadian(this->spacialInfo.visionConeDegrees/2)));
+        }
+        inline bool isWithinVision(Boid::ptr_t otherBoid) const {
+            return isWithinVision(otherBoid->getPos());
         }
     };
 
@@ -242,8 +245,21 @@ namespace boid {
 
     //Forward Declaration
     class BoidModel;
-    float2 doSeek(Boid::ptr_t boidp, float2 targetPos) {
+    float2 doSeek(Boid::ptr_t boidp, float2 targetPos, bool respectVision = false) {
+        if (respectVision && !boidp->isWithinVision(targetPos))
+            return float2(0.0f);
         float2 desiredVel = normalize(targetPos - boidp->getPos()) * boidp->spacialInfo.maxSpeed;
+        float2 steeringVector = desiredVel - boidp->getVel();
+        if (linalg::length(steeringVector) > boidp->spacialInfo.maxForce) {
+            steeringVector = normalize(steeringVector) * boidp->spacialInfo.maxForce;
+        }
+        //std::cout << steeringVector.x << " " << steeringVector.y << std::endl;
+        return steeringVector;
+    }
+    float2 doFlee(Boid::ptr_t boidp, float2 targetPos, bool respectVision = false) {
+        if (respectVision && !boidp->isWithinVision(targetPos))
+            return float2(0.0f);
+        float2 desiredVel = normalize(boidp->getPos() - targetPos) * boidp->spacialInfo.maxSpeed;
         float2 steeringVector = desiredVel - boidp->getVel();
         if (linalg::length(steeringVector) > boidp->spacialInfo.maxForce) {
             steeringVector = normalize(steeringVector) * boidp->spacialInfo.maxForce;
@@ -274,7 +290,8 @@ namespace boid {
             //forceManager.applyForces(flock);
 
             flock[0]->spacialInfo.acc = float2(0.0f);
-            flock[0]->spacialInfo.acc = doSeek(flock[0], mousePos);
+            flock[0]->spacialInfo.acc = doSeek(flock[0], flock[1]->getPos());
+            flock[1]->spacialInfo.acc = doFlee(flock[1], flock[0]->getPos());
 
             //Apply Euler-integration style movement
             std::for_each(flock.begin(), flock.end(), [this, frametime](Boid::ptr_t const& boidp)->void{
@@ -345,7 +362,7 @@ namespace boid {
             movementSystem.limitsXY = modelDimensions;
             modelCommandCooldown = 0.0f;
             
-            for (int x = 0; x < 1; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
+            for (int x = 0; x < 2; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
 
             this->resetPositions();
 
