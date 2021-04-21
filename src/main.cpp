@@ -13,6 +13,7 @@ Camera2D setupCamera(linalg::aliases::float2& gw) {
 
 void updateGameState(boid::BoidModel& model){
     float frameTime = GetFrameTime();
+    Vector2 currentMousePosition = GetMousePosition();
 
     if (IsKeyDown(KEY_R)) {
         model.resetPositions();
@@ -20,7 +21,7 @@ void updateGameState(boid::BoidModel& model){
     if (IsKeyReleased(KEY_KP_ADD) || IsKeyReleased(KEY_EQUAL)) { model.addBoids(1); }
     if (IsKeyReleased(KEY_KP_SUBTRACT) || IsKeyReleased(KEY_MINUS)) { model.removeBoids(1); }
 
-    model.updateModel(frameTime);
+    model.updateModel(frameTime, (linalg::aliases::float2){currentMousePosition.x, currentMousePosition.y});
 }
 
 void drawGameState(Camera2D& camera, boid::BoidModel& model) {
@@ -31,6 +32,8 @@ void drawGameState(Camera2D& camera, boid::BoidModel& model) {
             
             BeginMode2D(camera);
 
+                DrawText(TextFormat("Mouse Location (%3.0f, %3.0f)", model.mousePosition.x, model.mousePosition.y), 10, 10, 16, BLACK);
+                
                 model.renderModel();
 
             EndMode2D();

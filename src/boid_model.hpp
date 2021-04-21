@@ -322,6 +322,8 @@ namespace boid {
         //Amount of time in seconds before the model will allow another command to be executed
         float modelCommandCooldown;
 
+        float2 mousePosition;
+
         randutil::RandomNumberFactory<float> randomManager;
 
         BoidModel() = delete;
@@ -359,7 +361,8 @@ namespace boid {
                 if (flock.size() > 0) flock.pop_back();
         }
 
-        inline void updateModel(float frametime) {
+        inline void updateModel(float frametime, float2 mouseLocation) {
+            mousePosition = mouseLocation;
             modelCommandCooldown = detail::constrainAbove(modelCommandCooldown - frametime, 0.0f);
             movementSystem.process(flock, frametime);
         }
