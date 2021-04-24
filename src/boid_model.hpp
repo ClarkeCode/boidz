@@ -81,6 +81,8 @@ namespace boid {
         byte4 borderColour, fillColour;
 
         VisualComponent() : debugLevel(0), isDisplayable(true), showDebugInfo(false), borderColour(0,0,0,255), fillColour(128,128,128,255) {}
+        inline void setBorderColour(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) { borderColour = byte4(r, g, b, a); }
+        inline void setFillColour(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) { fillColour = byte4(r, g, b, a); }
     };
 
     class Boid { // : public ecs::Entity {
@@ -140,6 +142,9 @@ namespace boid {
     float2 doPursue(Boid::ptr_t boidp, float2 targetPos, float2 targetVel, bool respectVision = false) {
         return doSeek(boidp, targetPos + targetVel, respectVision);
     }
+    float2 doEvasion(Boid::ptr_t boidp, float2 targetPos, float2 targetVel, bool respectVision = false) {
+        return doFlee(boidp, targetPos + targetVel, respectVision);
+    }
 
     float2 doArrival(Boid::ptr_t boidp, float2 targetPos, float stoppingRadius, bool respectVision = false) {
         if (respectVision && !boidp->isWithinVision(targetPos)) return float2(0.0f);
@@ -172,9 +177,11 @@ namespace boid {
             //Apply forces to each member of the flock
             //forceManager.applyForces(flock);
 
-            flock[0]->spacialInfo.acc = float2(0.0f);
+            //flock[0]->spacialInfo.acc = float2(0.0f);
             flock[0]->spacialInfo.acc = doArrival(flock[0], mousePos, 200);
-            flock[1]->spacialInfo.acc = doPursue(flock[1], flock[0]->getPos(), flock[0]->getVel());
+            flock[1]->visualInfo.setFillColour(0, 128, 0); flock[1]->spacialInfo.acc = doPursue(flock[1], flock[0]->getPos(), flock[0]->getVel());
+            flock[2]->visualInfo.setFillColour(0, 0, 128); flock[2]->spacialInfo.acc = doFlee(flock[2], mousePos);
+            flock[3]->visualInfo.setFillColour(128, 128, 0); flock[3]->spacialInfo.acc = doEvasion(flock[3], flock[0]->getPos(), flock[0]->getVel());
 
             //Apply Euler-integration style movement
             std::for_each(flock.begin(), flock.end(), [this, frametime](Boid::ptr_t const& boidp)->void{
@@ -245,7 +252,7 @@ namespace boid {
             movementSystem.limitsXY = modelDimensions;
             modelCommandCooldown = 0.0f;
             
-            for (int x = 0; x < 2; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
+            for (int x = 0; x < 5; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
 
             this->resetPositions();
 
