@@ -20,7 +20,7 @@ namespace randutil {
         //Produces a random number within the provided range - [lowerBound, upperBound)
         template<typename T>
         T produceRandom(T const& lowerBound, T const& upperBound) {
-            return (upperBound - lowerBound) * distribution(generator);
+            return (upperBound - lowerBound) * distribution(generator) - (upperBound - lowerBound) / 2;
         }
     };
 }
