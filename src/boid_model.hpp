@@ -163,6 +163,29 @@ namespace boid {
 		return steeringVector;
 	}
 
+	//TODO: change the static radian angle so that it is not shared across all instances, add new component for holding local variables via maps?
+	float2 doWander(Boid::ptr_t boidp, float wanderRadius, randutil::RandomNumberFactory<>& randomFactory, bool allowRendering = false) {
+		static float radianAngle = 0.0f;
+
+		radianAngle += randomFactory.produceRandom<float>(-0.3f, 0.3f);
+		float2 ray = detail::produceUnitVector(radianAngle) * wanderRadius;
+
+		if (allowRendering) {
+			DrawCircleLines( (boidp->getPos()+boidp->getVel()).x, (boidp->getPos()+boidp->getVel()).y, wanderRadius, {128,128,0,255});
+			DrawLineEx(detail::compat(boidp->getPos()+boidp->getVel()), detail::compat(boidp->getPos()+boidp->getVel()+ray), 1, RED);
+			//DrawText(TextFormat("%f", radianAngle), 300, 10, 12, BLACK);
+		}
+
+		float2 targetPos = boidp->getPos() + boidp->getVel() + ray;
+		float2 desiredVel = detail::vscaleToLength(targetPos - boidp->getPos(), boidp->spacialInfo.maxSpeed);
+		
+		float2 steeringVector = desiredVel - boidp->getVel();
+		if (linalg::length(steeringVector) > boidp->spacialInfo.maxForce) {
+			steeringVector = detail::vscaleToLength(steeringVector, boidp->spacialInfo.maxForce);
+		}
+		return steeringVector;
+	}
+
 	class MovementSystem : public ecs::System {
 		public:
 		bool positionLimitWrapping;
@@ -172,7 +195,7 @@ namespace boid {
 		virtual void process(ecs::Entity::EntityContainer const& entities) override {
 			//TODO: Implement movement mehaviour of boids with SpacialComponents, rules for alignment, separation, cohesion may need to be a separate system
 		}
-
+		randutil::RandomNumberFactory<> randomFactory;
 		inline void process(float frametime, float2 const& mousePos, Boid::Flock & flock) {
 			//Apply forces to each member of the flock
 			//forceManager.applyForces(flock);
@@ -182,6 +205,8 @@ namespace boid {
 			flock[1]->visualInfo.setFillColour(0, 128, 0); flock[1]->spacialInfo.acc = doPursue(flock[1], flock[0]->getPos(), flock[0]->getVel());
 			flock[2]->visualInfo.setFillColour(0, 0, 128); flock[2]->spacialInfo.acc = doFlee(flock[2], mousePos);
 			flock[3]->visualInfo.setFillColour(128, 128, 0); flock[3]->spacialInfo.acc = doEvasion(flock[3], flock[0]->getPos(), flock[0]->getVel());
+			flock[4]->visualInfo.setFillColour(0, 128, 128); flock[4]->spacialInfo.acc = doWander(flock[4], 100.0f, randomFactory, true);
+			//flock[5]->spacialInfo.acc = doWander(flock[5], 100.0f, randomFactory, true);
 
 			//Apply Euler-integration style movement
 			std::for_each(flock.begin(), flock.end(), [this, frametime](Boid::ptr_t const& boidp)->void{
@@ -218,7 +243,7 @@ namespace boid {
 					DrawLineEx(compat(boidp->spacialInfo.pos), compat(
 						boidp->spacialInfo.pos + linalg::rot(detail::degreeToRadian(boidp->spacialInfo.visionConeDegrees/2), boidp->spacialInfo.vel)), 1, ORANGE);
 					DrawLineEx(compat(boidp->spacialInfo.pos), compat(
-						boidp->spacialInfo.pos + linalg::rot(2*3.1415f - detail::degreeToRadian(boidp->spacialInfo.visionConeDegrees/2), boidp->spacialInfo.vel)), 1, PURPLE);
+						boidp->spacialInfo.pos + linalg::rot(2*detail::_pi - detail::degreeToRadian(boidp->spacialInfo.visionConeDegrees/2), boidp->spacialInfo.vel)), 1, PURPLE);
 
 					for (Boid::ptr_t const& other : flock) {
 						if (boidp->isWithinVision(other) && distance(boidp->getPos(), other->getPos()) < 100 ) {
@@ -252,7 +277,7 @@ namespace boid {
 			movementSystem.limitsXY = modelDimensions;
 			modelCommandCooldown = 0.0f;
 			
-			for (int x = 0; x < 5; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
+			for (int x = 0; x < 6; x++) { flock.push_back(std::move(std::make_shared<Boid>())); }
 
 			this->resetPositions();
 
