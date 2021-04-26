@@ -2,6 +2,7 @@
 #define GAME_MODEL_BOID
 #include <vector>
 #include "lib/ecs.hpp"
+#include "lib/spatial_sets.hpp"
 #include "lib/linalg.h"
 
 //TODO: Following includes should be moved into cpp implementation file(s)
@@ -20,6 +21,8 @@ namespace boid {
 		const float _pi = PI;
 		//Conversion function to turn linalg vector into a raylib vector
 		Vector2 compat(linalgvec2 const& vect) { return Vector2{vect.x, vect.y}; }
+		//Conversion function to turn 4-length linalg floatvector into a raylib Rectangle
+		Rectangle compatRect(float4 const& vect4) { return {vect4.x, vect4.y, vect4.z, vect4.w}; }
 		//Conversion function to turn 4-length linalg bytevector into a raylib Color
 		Color compatColour(byte4 const& vect4) { return (Color){vect4.x, vect4.y, vect4.z, vect4.w}; }
 		//Produces linalg vector from a radian angle
@@ -173,6 +176,25 @@ namespace boid {
 		return produceSteeringVector(boidp, desiredVel);
 	}
 
+	//wallCoordinates is a tuple of (x,y,width,height)
+	//TODO: alter the containment behaviour to reflect steering across the radius border instead of just seeking the centre
+	float2 doSquareContainment(Boid::ptr_t boidp, float4 wallCoordinates, float evasionRadius, bool allowRendering = false) {
+		//float2 currentVelocity = boidp->getVel();
+		//float2 futurePosition = boidp->getPos() + boidp->getVel();
+		float4 evasionRectangle = {wallCoordinates.x+evasionRadius, wallCoordinates.y+evasionRadius, wallCoordinates.z-2*evasionRadius, wallCoordinates.w-2*evasionRadius};
+
+		if (allowRendering) {
+			DrawRectangleLinesEx(detail::compatRect(wallCoordinates), 3, BLACK);
+			DrawRectangleLinesEx(detail::compatRect(evasionRectangle), 1, BLUE);
+		}
+
+		//If the boid is not within the area which requires steering, no steering vector is required, so exit early
+		if (!spatialsets::isPointWithinDifference(boidp->getPos(), wallCoordinates, evasionRectangle)) {
+			return float2(0.0f);
+		}
+		return doSeek(boidp, spatialsets::getCentreOfArea(wallCoordinates));
+	}
+
 	class MovementSystem : public ecs::System {
 		public:
 		bool positionLimitWrapping;
@@ -193,7 +215,7 @@ namespace boid {
 			flock[2]->visualInfo.setFillColour(0, 0, 128); flock[2]->spacialInfo.acc = doFlee(flock[2], mousePos);
 			flock[3]->visualInfo.setFillColour(128, 128, 0); flock[3]->spacialInfo.acc = doEvasion(flock[3], flock[0]->getPos(), flock[0]->getVel());
 			flock[4]->visualInfo.setFillColour(0, 128, 128); flock[4]->spacialInfo.acc = doWander(flock[4], 100.0f, randomFactory, true);
-			//flock[5]->spacialInfo.acc = doWander(flock[5], 100.0f, randomFactory, true);
+			flock[5]->visualInfo.setFillColour(128, 0, 128); flock[5]->spacialInfo.acc = doSquareContainment(flock[5], float4(30,30,700,400), flock[5]->spacialInfo.maxSpeed, true);
 
 			//Apply Euler-integration style movement
 			std::for_each(flock.begin(), flock.end(), [this, frametime](Boid::ptr_t const& boidp)->void{
