@@ -115,28 +115,25 @@ namespace boid {
 	//Forward Declaration
 	class BoidModel;
 
+	float2 produceSteeringVector(Boid::ptr_t boidp, float2 desiredVelocity) {
+		float2 steeringVector = desiredVelocity - boidp->getVel();
+		if (linalg::length(steeringVector) > boidp->spacialInfo.maxForce) {
+			steeringVector = detail::vscaleToLength(steeringVector, boidp->spacialInfo.maxForce);
+		}
+		return steeringVector;
+	}
+
 	float2 doSeek(Boid::ptr_t boidp, float2 targetPos, bool respectVision = false) {
 		if (respectVision && !boidp->isWithinVision(targetPos)) return float2(0.0f);
 
 		float2 desiredVel = detail::vscaleToLength(targetPos - boidp->getPos(), boidp->spacialInfo.maxSpeed);
-
-		float2 steeringVector = desiredVel - boidp->getVel();
-		if (linalg::length(steeringVector) > boidp->spacialInfo.maxForce) {
-			steeringVector = detail::vscaleToLength(steeringVector, boidp->spacialInfo.maxForce);
-		}
-		//std::cout << steeringVector.x << " " << steeringVector.y << std::endl;
-		return steeringVector;
+		return produceSteeringVector(boidp, desiredVel);
 	}
 	float2 doFlee(Boid::ptr_t boidp, float2 targetPos, bool respectVision = false) {
 		if (respectVision && !boidp->isWithinVision(targetPos)) return float2(0.0f);
 
 		float2 desiredVel = detail::vscaleToLength(boidp->getPos() - targetPos, boidp->spacialInfo.maxSpeed);
-
-		float2 steeringVector = desiredVel - boidp->getVel();
-		if (linalg::length(steeringVector) > boidp->spacialInfo.maxForce) {
-			steeringVector = detail::vscaleToLength(steeringVector, boidp->spacialInfo.maxForce);
-		}
-		return steeringVector;
+		return produceSteeringVector(boidp, desiredVel);
 	}
 
 	float2 doPursue(Boid::ptr_t boidp, float2 targetPos, float2 targetVel, bool respectVision = false) {
@@ -155,12 +152,7 @@ namespace boid {
 		float clippedSpeed = linalg::min(rampedSpeed, boidp->spacialInfo.maxSpeed);
 
 		float2 desiredVel = (clippedSpeed / distance) * targetOffset;
-
-		float2 steeringVector = desiredVel - boidp->getVel();
-		if (linalg::length(steeringVector) > boidp->spacialInfo.maxForce) {
-			steeringVector = detail::vscaleToLength(steeringVector, boidp->spacialInfo.maxForce);
-		}
-		return steeringVector;
+		return produceSteeringVector(boidp, desiredVel);
 	}
 
 	//TODO: change the static radian angle so that it is not shared across all instances, add new component for holding local variables via maps?
@@ -178,12 +170,7 @@ namespace boid {
 
 		float2 targetPos = boidp->getPos() + boidp->getVel() + ray;
 		float2 desiredVel = detail::vscaleToLength(targetPos - boidp->getPos(), boidp->spacialInfo.maxSpeed);
-		
-		float2 steeringVector = desiredVel - boidp->getVel();
-		if (linalg::length(steeringVector) > boidp->spacialInfo.maxForce) {
-			steeringVector = detail::vscaleToLength(steeringVector, boidp->spacialInfo.maxForce);
-		}
-		return steeringVector;
+		return produceSteeringVector(boidp, desiredVel);
 	}
 
 	class MovementSystem : public ecs::System {
